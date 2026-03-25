@@ -733,7 +733,7 @@ mod tests {
         let config = loader.load(None).await?;
 
         // These should be the defaults from Config::default()
-        assert_eq!(config.preset, Some("PMBTUS".to_string()));
+        assert_eq!(config.preset, Some("PMBTQS".to_string()));
         assert!(!config.debug);
         Ok(())
     }

@@ -53,7 +53,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            preset: Some("PMBTUS".to_string()),
+            preset: Some("PMBTQS".to_string()),
             theme: default_theme(),
             language: default_language(),
             debug: false,
@@ -210,6 +210,9 @@ pub struct ComponentsConfig {
 
     #[serde(default)]
     pub usage: UsageComponentConfig,
+
+    #[serde(default)]
+    pub quota: QuotaComponentConfig,
 
     #[serde(default)]
     pub status: StatusComponentConfig,
@@ -530,7 +533,7 @@ impl Default for TokensComponentConfig {
                 enabled: true,
                 icon_color: "cyan".to_string(),
                 text_color: "white".to_string(),
-                emoji_icon: "📊".to_string(),
+                emoji_icon: "🪙".to_string(),
                 nerd_icon: "\u{f201}".to_string(),
                 text_icon: "[T]".to_string(),
             },
@@ -641,6 +644,59 @@ impl Default for TokensStatusIconsConfig {
     }
 }
 
+/// Quota component configuration (API usage limits)
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct QuotaComponentConfig {
+    #[serde(flatten)]
+    pub base: BaseComponentConfig,
+
+    /// Show 5-hour rate window
+    #[serde(default = "default_true")]
+    pub show_five_hour: bool,
+
+    /// Show 7-day rate window
+    #[serde(default = "default_true")]
+    pub show_seven_day: bool,
+
+    /// Show progress bar
+    #[serde(default)]
+    pub show_progress_bar: bool,
+
+    /// Show percentage text
+    #[serde(default = "default_true")]
+    pub show_percentage: bool,
+
+    /// Progress bar width (characters)
+    #[serde(default = "default_quota_progress_width")]
+    pub progress_width: u32,
+
+    /// Cache TTL in seconds
+    #[serde(default = "default_quota_cache_ttl")]
+    pub cache_ttl: u64,
+}
+
+impl Default for QuotaComponentConfig {
+    fn default() -> Self {
+        Self {
+            base: BaseComponentConfig {
+                enabled: true,
+                icon_color: "cyan".to_string(),
+                text_color: "white".to_string(),
+                emoji_icon: "📊".to_string(),
+                nerd_icon: "\u{f201}".to_string(),
+                text_icon: "[Q]".to_string(),
+            },
+            show_five_hour: true,
+            show_seven_day: true,
+            show_progress_bar: false,
+            show_percentage: true,
+            progress_width: default_quota_progress_width(),
+            cache_ttl: default_quota_cache_ttl(),
+        }
+    }
+}
+
 /// Usage component configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UsageComponentConfig {
@@ -668,7 +724,7 @@ impl Default for UsageComponentConfig {
     fn default() -> Self {
         Self {
             base: BaseComponentConfig {
-                enabled: true,
+                enabled: false,
                 icon_color: "yellow".to_string(),
                 text_color: "white".to_string(),
                 emoji_icon: "💰".to_string(),
@@ -1065,6 +1121,14 @@ const fn default_precision() -> u32 {
     2
 }
 
+const fn default_quota_progress_width() -> u32 {
+    8
+}
+
+const fn default_quota_cache_ttl() -> u64 {
+    300
+}
+
 const fn default_max_rows() -> u32 {
     5
 }
@@ -1102,7 +1166,7 @@ const fn default_branch_large_repo_threshold() -> u64 {
 }
 
 const fn default_progress_width() -> u32 {
-    15
+    8
 }
 
 fn default_filled_char() -> String {

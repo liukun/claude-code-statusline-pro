@@ -22,6 +22,7 @@ const POWERLINE_PALETTE: &[(&str, &str)] = &[
     ("branch", "green"),
     ("tokens", "yellow"),
     ("usage", "orange"),
+    ("quota", "teal"),
     ("status", "magenta"),
 ];
 
@@ -31,6 +32,7 @@ const CAPSULE_PALETTE: &[(&str, &str)] = &[
     ("branch", "bright_green"),
     ("tokens", "yellow"),
     ("usage", "bright_orange"),
+    ("quota", "bright_cyan"),
     ("status", "bright_magenta"),
 ];
 
@@ -144,7 +146,8 @@ impl StatuslineGenerator {
     fn initialize_components(&mut self) {
         use crate::components::{
             BranchComponentFactory, ModelComponentFactory, ProjectComponentFactory,
-            StatusComponentFactory, TokensComponentFactory, UsageComponentFactory,
+            QuotaComponentFactory, StatusComponentFactory, TokensComponentFactory,
+            UsageComponentFactory,
         };
 
         // Register all component factories
@@ -160,6 +163,8 @@ impl StatuslineGenerator {
             .insert("status".to_string(), Box::new(StatusComponentFactory));
         self.component_registry
             .insert("usage".to_string(), Box::new(UsageComponentFactory));
+        self.component_registry
+            .insert("quota".to_string(), Box::new(QuotaComponentFactory));
     }
 
     fn refresh_multiline_renderer(&mut self) {
@@ -204,6 +209,7 @@ impl StatuslineGenerator {
                 'B' => Some("branch"),
                 'T' => Some("tokens"),
                 'U' => Some("usage"),
+                'Q' => Some("quota"),
                 'S' => Some("status"),
                 _ => None,
             })
@@ -340,6 +346,7 @@ impl StatuslineGenerator {
             "branch" => self.config.components.branch.base.icon_color.clone(),
             "tokens" => self.config.components.tokens.base.icon_color.clone(),
             "usage" => self.config.components.usage.base.icon_color.clone(),
+            "quota" => self.config.components.quota.base.icon_color.clone(),
             "status" => self.config.components.status.base.icon_color.clone(),
             other => {
                 eprintln!(

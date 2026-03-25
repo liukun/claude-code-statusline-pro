@@ -1297,6 +1297,7 @@ mod tests {
             }),
             ..Config::default()
         };
+        config.components.usage.base.enabled = true;
         config.components.order = vec!["usage".to_string()];
 
         let temp_dir = tempfile::tempdir()?;
