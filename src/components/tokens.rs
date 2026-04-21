@@ -10,6 +10,7 @@ use super::base::{Component, ComponentFactory, ComponentOutput, RenderContext};
 use crate::config::{BaseComponentConfig, Config, TokensComponentConfig};
 use crate::storage;
 use crate::utils::model_parser::parse_model_id;
+use crate::utils::{pct_to_vertical_block, rainbow_gradient_color};
 
 #[derive(Clone, Debug)]
 struct TokenUsageInfo {
@@ -240,6 +241,19 @@ impl TokensComponent {
         }
     }
 
+    fn format_compact_usage(&self, info: &TokenUsageInfo, percentage: f64) -> String {
+        if self.config.show_raw_numbers {
+            return self.format_usage(info);
+        }
+        if percentage < 10.0 {
+            let total_k = to_f64(info.total) / 1_000.0;
+            format!("(/{total_k:.0}k)")
+        } else {
+            let used_k = to_f64(info.used) / 1_000.0;
+            format!("({used_k:.0}k)")
+        }
+    }
+
     fn format_usage(&self, info: &TokenUsageInfo) -> String {
         if self.config.show_raw_numbers {
             format!("({}/{})", info.used, info.total)
@@ -276,15 +290,33 @@ impl Component for TokensComponent {
 
         let mut parts = Vec::new();
 
-        if let Some(bar) = self.build_progress_bar(ctx, clamped_percentage) {
-            parts.push(format!("[{bar}]"));
+        if self.config.compact_bar {
+            if self.config.show_percentage {
+                let block = pct_to_vertical_block(clamped_percentage);
+                if ctx.terminal.supports_colors() {
+                    let (r, g, b) = rainbow_gradient_color(clamped_percentage);
+                    parts.push(format!(
+                        "\x1b[38;2;{r};{g};{b}m{clamped_percentage:.0}%{block}\x1b[0m"
+                    ));
+                } else {
+                    parts.push(format!("{clamped_percentage:.0}%{block}"));
+                }
+            }
+        } else {
+            if let Some(bar) = self.build_progress_bar(ctx, clamped_percentage) {
+                parts.push(format!("[{bar}]"));
+            }
+
+            if self.config.show_percentage {
+                parts.push(format!("{clamped_percentage:.1}%"));
+            }
         }
 
-        if self.config.show_percentage {
-            parts.push(format!("{clamped_percentage:.1}%"));
+        if self.config.compact_bar {
+            parts.push(self.format_compact_usage(&usage, clamped_percentage));
+        } else {
+            parts.push(self.format_usage(&usage));
         }
-
-        parts.push(self.format_usage(&usage));
 
         if let Some(status_icon) = self.select_status_icon(ctx, clamped_percentage) {
             parts.push(status_icon);
@@ -316,44 +348,6 @@ fn icon_for_kind(set: &crate::config::TokenIconSetConfig, kind: TokenStatusKind)
 enum TokenStatusKind {
     Backup,
     Critical,
-}
-
-fn rainbow_gradient_color(percentage: f64) -> (u8, u8, u8) {
-    let p = percentage.clamp(0.0, 100.0);
-
-    let soft_green = (80.0, 200.0, 80.0);
-    let soft_yellow_green = (150.0, 200.0, 60.0);
-    let soft_yellow = (200.0, 200.0, 80.0);
-    let soft_orange = (220.0, 160.0, 60.0);
-    let soft_red = (200.0, 100.0, 80.0);
-
-    let lerp = |start: (f64, f64, f64), end: (f64, f64, f64), t: f64| {
-        let clamp_t = t.clamp(0.0, 1.0);
-        (
-            (end.0 - start.0).mul_add(clamp_t, start.0),
-            (end.1 - start.1).mul_add(clamp_t, start.1),
-            (end.2 - start.2).mul_add(clamp_t, start.2),
-        )
-    };
-
-    let (r, g, b) = if p <= 25.0 {
-        lerp(soft_green, soft_yellow_green, p / 25.0)
-    } else if p <= 50.0 {
-        lerp(soft_yellow_green, soft_yellow, (p - 25.0) / 25.0)
-    } else if p <= 75.0 {
-        lerp(soft_yellow, soft_orange, (p - 50.0) / 25.0)
-    } else {
-        lerp(soft_orange, soft_red, (p - 75.0) / 25.0)
-    };
-
-    let convert = |value: f64| -> u8 {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        {
-            value.clamp(0.0, 255.0).round() as u8
-        }
-    };
-
-    (convert(r), convert(g), convert(b))
 }
 
 fn clamp_round_to_usize(value: f64, max: usize) -> usize {
@@ -480,6 +474,7 @@ mod tests {
     #[tokio::test]
     async fn test_tokens_progress_bar_enabled() {
         let config = build_tokens_config(|config| {
+            config.compact_bar = false;
             config.show_progress_bar = true;
             config.show_percentage = false;
             config.show_raw_numbers = false;
@@ -496,6 +491,7 @@ mod tests {
     #[tokio::test]
     async fn test_tokens_progress_bar_gradient() {
         let config = build_tokens_config(|config| {
+            config.compact_bar = false;
             config.show_progress_bar = true;
             config.show_percentage = false;
             config.show_raw_numbers = false;

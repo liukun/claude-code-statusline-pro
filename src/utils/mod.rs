@@ -7,6 +7,55 @@ pub mod model_parser;
 use std::env;
 use std::path::PathBuf;
 
+const VERTICAL_BLOCKS: &[char] = &['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+
+#[must_use]
+pub fn pct_to_vertical_block(pct: f64) -> char {
+    let clamped = pct.clamp(0.0, 100.0);
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let idx = ((clamped / 100.0) * 7.0).round() as usize;
+    VERTICAL_BLOCKS[idx.min(7)]
+}
+
+#[must_use]
+pub fn rainbow_gradient_color(percentage: f64) -> (u8, u8, u8) {
+    let p = percentage.clamp(0.0, 100.0);
+
+    let soft_green = (80.0, 200.0, 80.0);
+    let soft_yellow_green = (150.0, 200.0, 60.0);
+    let soft_yellow = (200.0, 200.0, 80.0);
+    let soft_orange = (220.0, 160.0, 60.0);
+    let soft_red = (200.0, 100.0, 80.0);
+
+    let lerp = |start: (f64, f64, f64), end: (f64, f64, f64), t: f64| {
+        let clamp_t = t.clamp(0.0, 1.0);
+        (
+            (end.0 - start.0).mul_add(clamp_t, start.0),
+            (end.1 - start.1).mul_add(clamp_t, start.1),
+            (end.2 - start.2).mul_add(clamp_t, start.2),
+        )
+    };
+
+    let (r, g, b) = if p <= 25.0 {
+        lerp(soft_green, soft_yellow_green, p / 25.0)
+    } else if p <= 50.0 {
+        lerp(soft_yellow_green, soft_yellow, (p - 25.0) / 25.0)
+    } else if p <= 75.0 {
+        lerp(soft_yellow, soft_orange, (p - 50.0) / 25.0)
+    } else {
+        lerp(soft_orange, soft_red, (p - 75.0) / 25.0)
+    };
+
+    let convert = |value: f64| -> u8 {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        {
+            value.clamp(0.0, 255.0).round() as u8
+        }
+    };
+
+    (convert(r), convert(g), convert(b))
+}
+
 /// 获取用户主目录，优先尊重 `HOME` 环境变量。
 ///
 /// 在 Windows Runner 上，GitHub Actions 会为子进程注入 `HOME`，但

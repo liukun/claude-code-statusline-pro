@@ -13,7 +13,8 @@ use serde::{Deserialize, Serialize};
 
 use super::base::{Component, ComponentFactory, ComponentOutput, RenderContext};
 use crate::config::{BaseComponentConfig, Config, QuotaComponentConfig};
-use crate::themes::ansi_fg;
+use crate::themes::{ansi_fg, ANSI_RESET};
+use crate::utils::{pct_to_vertical_block, rainbow_gradient_color};
 
 const OAUTH_USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 const KEYCHAIN_SERVICE: &str = "Claude Code-credentials";
@@ -244,16 +245,6 @@ fn elapsed_pct(label: &str, resets_at: Option<&str>) -> Option<f64> {
     Some((elapsed / window_secs * 100.0).clamp(0.0, 100.0))
 }
 
-fn select_color(pct: f64) -> &'static str {
-    if pct >= 85.0 {
-        "red"
-    } else if pct >= 60.0 {
-        "yellow"
-    } else {
-        "green"
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -283,15 +274,8 @@ impl QuotaComponent {
 
     fn render_window(&self, label: &str, window: &RateWindow, supports_colors: bool) -> String {
         let pct = window.utilization.clamp(0.0, 100.0);
-        let color_name = select_color(pct);
 
         let mut text = String::new();
-
-        if supports_colors {
-            if let Some(ansi) = ansi_fg(color_name) {
-                text.push_str(&ansi);
-            }
-        }
 
         text.push_str(label);
 
@@ -303,22 +287,47 @@ impl QuotaComponent {
 
         if self.config.show_percentage {
             let elapsed = elapsed_pct(label, window.resets_at.as_deref());
-            if let Some(ep) = elapsed {
-                let cmp = if pct > ep + 1.0 {
-                    ">"
-                } else if pct + 1.0 < ep {
-                    "<"
-                } else {
-                    "="
-                };
-                let _ = write!(text, "({pct:.0}%{cmp}{ep:.0}%)");
-            } else {
-                let _ = write!(text, " {pct:.0}%");
-            }
-        }
 
-        if supports_colors {
-            text.push_str("\x1b[0m");
+            let usage_str = if supports_colors {
+                let (r, g, b) = rainbow_gradient_color(pct);
+                if self.config.compact_bar {
+                    let block = pct_to_vertical_block(pct);
+                    format!("\x1b[38;2;{r};{g};{b}m{pct:.0}%{block}\x1b[0m")
+                } else {
+                    format!("\x1b[38;2;{r};{g};{b}m{pct:.0}%\x1b[0m")
+                }
+            } else if self.config.compact_bar {
+                let block = pct_to_vertical_block(pct);
+                format!("{pct:.0}%{block}")
+            } else {
+                format!("{pct:.0}%")
+            };
+
+            if let Some(ep) = elapsed {
+                let (cmp, cmp_color) = if pct > ep + 1.0 {
+                    (">", "red")
+                } else if pct + 1.0 < ep {
+                    ("<", "green")
+                } else {
+                    ("=", "yellow")
+                };
+                let cmp_str = if supports_colors {
+                    ansi_fg(cmp_color).map_or_else(
+                        || cmp.to_string(),
+                        |ansi| format!("{ansi}{cmp}{ANSI_RESET}"),
+                    )
+                } else {
+                    cmp.to_string()
+                };
+                if self.config.compact_bar {
+                    let elapsed_block = pct_to_vertical_block(ep);
+                    let _ = write!(text, "({usage_str}{cmp_str}{ep:.0}%{elapsed_block})");
+                } else {
+                    let _ = write!(text, "({usage_str}{cmp_str}{ep:.0}%)");
+                }
+            } else {
+                let _ = write!(text, " {usage_str}");
+            }
         }
 
         text
@@ -418,13 +427,6 @@ mod tests {
         let chars: Vec<char> = bar.chars().collect();
         assert_eq!(chars.len(), 8);
         assert_eq!(chars.iter().filter(|&&c| c == '\u{2588}').count(), 4);
-    }
-
-    #[test]
-    fn test_select_color() {
-        assert_eq!(select_color(10.0), "green");
-        assert_eq!(select_color(60.0), "yellow");
-        assert_eq!(select_color(90.0), "red");
     }
 
     #[test]
